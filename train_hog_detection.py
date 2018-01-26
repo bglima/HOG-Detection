@@ -49,7 +49,7 @@ for imagePath in paths.list_images(args["training"]):
  
 	# find contours in the edge map, keeping only the largest one which
 	# is presumed to be the car logod
-     image2, cnts, hierarchy = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+     _, cnts, _ = cv2.findContours(edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
      c = max(cnts, key=cv2.contourArea)
 
 	# extract the logo of the car and resize it to a canonical width
@@ -65,9 +65,8 @@ for imagePath in paths.list_images(args["training"]):
      # update the data and labels
      data.append(H)
      labels.append(make)     
-     
-     print('Extracting features from {}.'.format(imagePath) )
-     
+     print('Extracting features from {}'.format(imagePath) )
+    
 # "train" the nearest neighbors classifier
 print "[INFO] training classifier..."
 model = KNeighborsClassifier(n_neighbors=1)
@@ -91,9 +90,9 @@ for imagePath in paths.list_images(args["test"]):
 		cells_per_block=(2, 2), transform_sqrt=True, visualise=True)
 	
 	X = H.reshape(1, -1)
-	neighbor, loss = model.kneighbors(X, 1, return_distance=True)
+	loss, _ = model.kneighbors(X, 1, return_distance=True)
 	pred = model.predict(X)[0]
-	print('{} of Euclidian distance from class {}'.format(loss[0][0], pred))
+	print('{} of distance from class {}'.format(loss, pred))
      
 	# visualize the HOG image
 	hogImage = exposure.rescale_intensity(hogImage, out_range=(0, 255))
