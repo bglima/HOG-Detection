@@ -16,6 +16,7 @@ from skimage import feature
 from sliding_window import sliding_window
 from image_pyramid import pyramid
 
+
 #%%
 
 # construct the argument parse and parse command line arguments
@@ -36,6 +37,7 @@ args = vars(ap.parse_args())
 print ("[INFO] extracting features...")
 data = []
 labels = []
+(winW, winH) = (200, 100)
 
 # loop over the image paths in the training set
 for imagePath in paths.list_images(args["training"]):
@@ -56,7 +58,7 @@ for imagePath in paths.list_images(args["training"]):
 	# and height
      (x, y, w, h) = cv2.boundingRect(c)
      logo = gray[y:y + h, x:x + w]
-     logo = cv2.resize(logo, (200, 100))
+     logo = cv2.resize(logo, (winW, winH))
 
      # extract Histogram of Oriented Gradients from the logo
      H = feature.hog(logo, orientations=9, pixels_per_cell=(10, 10),
@@ -76,35 +78,42 @@ print "[INFO] training complete!"
 #%%
 
 print "[INFO] evaluating..."
-
+cv2.namedWindow('MyWindow')
 for imagePath in paths.list_images(args["test"]):
-	# load the test image, convert it to grayscale, and resize it to
-	# the canonical size
-	image = cv2.imread(imagePath)
-	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-	logo = cv2.resize(gray, (200, 100))
- 
-	# extract Histogram of Oriented Gradients from the test image and
-	# predict the make of the car
-	(H, hogImage) = feature.hog(logo, orientations=9, pixels_per_cell=(10, 10),
-		cells_per_block=(2, 2), transform_sqrt=True, visualise=True)
-	
-	X = H.reshape(1, -1)
-	loss, _ = model.kneighbors(X, 1, return_distance=True)
-	pred = model.predict(X)[0]
-	print('{} of distance from class {}'.format(loss, pred))
-     
-	# visualize the HOG image
-	hogImage = exposure.rescale_intensity(hogImage, out_range=(0, 255))
-	hogImage = hogImage.astype("uint8")
-	cv2.imshow("HOG Image", hogImage)
- 
-	# draw the prediction on the test image and display it
-	#cv2.putText(image, pred.title(), (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1.0,
-	#	(0, 255, 0), 3)
- 
-	cv2.imshow("Test Image", image)
-	key = cv2.waitKey(0)
-	if key == ord('q'): break 
+    # load the test image, convert it to grayscale, and resize it to
+    # the canonical size
+    image_original = cv2.imread(imagePath)
+    image_pre_sized = cv2.resize(image_original, (400, 200))
+
+    detected = []
+
+    for image_resized in pyramid(image_pre_sized, downscale=1.2):
+        for (x, y, image) in sliding_window(image_resized, stepSize=16, windowSize=(winW, winH) ):
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            if gray.shape[0] != winH or gray.shape[1] != winW:
+                continue
+
+
+            #logo = cv2.resize(gray, (200, 100))     
+            # extract Histogram of Oriented Gradients from the test image and
+            # predict the make of the car
+            (H, hogImage) = feature.hog(gray, orientations=9, pixels_per_cell=(10, 10),
+                 cells_per_block=(2, 2), transform_sqrt=True, visualise=True)
+            	
+            X = H.reshape(1, -1)
+            loss, _ = model.kneighbors(X, 1, return_distance=True)
+            pred = model.predict(X)[0]
+            print('{} of distance from class {}'.format(loss, pred))
+            
+            if loss < 5.0:
+                detected.append([x, y, loss, gray, pred])
+    
+    sorted_detection = sorted( detected, key=lambda x: x[2] )
+    print('Best detection loss: {} as being from class {}'.format(sorted_detection[0][2], sorted_detection[0][4]))
+    cv2.imshow('MyWindow', sorted_detection[0][3])
+    key = cv2.waitKey(0)
+    if ( key == ord('q') ):
+        break
+    
 
 cv2.destroyAllWindows()
